@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Invaders Pro</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <div class="hud">
+            <div class="score">Score: <span id="score">0</span></div>
+            <div class="lives">Lives: <span id="lives">3</span></div>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+        <div class="controls">
+            <div class="start-screen" id="startScreen" style="display: block;">
+                <h1>SPACE INVADERS</h1>
+                <p>Use arrow keys or A/D to move</p>
+                <p>Press Space to shoot</p>
+                <button id="startButton">Start Game</button>
+            </div>
+            <div class="game-over" id="gameOverScreen">
+                <h1>GAME OVER</h1>
+                <p>Final Score: <span id="finalScore">0</span></p>
+                <button id="restartButton">Play Again</button>
+            </div>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
