@@ -20,9 +20,16 @@ const ENEMY_BULLET_SPEED = 4;
 const ENEMY_FIRE_RATE = 0.01; // Probability of enemy firing in each frame
 const PLAYER_FIRE_DELAY = 300; // milliseconds between player shots
 
+// Bunker constants
+const BUNKER_COUNT = 3;
+const BUNKER_WIDTH = 80;
+const BUNKER_HEIGHT = 60;
+const BUNKER_BLOCK_SIZE = 10; // Size of each destructible block
+const BUNKER_Y_POSITION = CANVAS_HEIGHT - 150;
+
 // Game state variables
 let canvas, ctx;
-let player, enemies, playerBullets, enemyBullets;
+let player, enemies, playerBullets, enemyBullets, bunkers;
 let score, lives;
 let gameActive = false;
 let lastPlayerShot = 0;
@@ -232,6 +239,61 @@ function initializeSounds() {
     }
 }
 
+function createBunkers() {
+    console.log("Creating bunkers...");
+    bunkers = [];
+    
+    // Calculate spacing between bunkers
+    const totalBunkerWidth = BUNKER_COUNT * BUNKER_WIDTH;
+    const spacing = (CANVAS_WIDTH - totalBunkerWidth) / (BUNKER_COUNT + 1);
+    
+    for (let i = 0; i < BUNKER_COUNT; i++) {
+        // Position each bunker with equal spacing
+        const bunkerX = spacing + i * (BUNKER_WIDTH + spacing);
+        
+        // Create the bunker with its blocks
+        const bunker = {
+            x: bunkerX,
+            y: BUNKER_Y_POSITION,
+            width: BUNKER_WIDTH,
+            height: BUNKER_HEIGHT,
+            blocks: []
+        };
+        
+        // Create the individual blocks that make up the bunker
+        for (let row = 0; row < BUNKER_HEIGHT / BUNKER_BLOCK_SIZE; row++) {
+            for (let col = 0; col < BUNKER_WIDTH / BUNKER_BLOCK_SIZE; col++) {
+                // Skip blocks to create the arch shape in the middle-bottom of the bunker
+                if (
+                    // Create arch in the middle bottom
+                    (row >= BUNKER_HEIGHT / BUNKER_BLOCK_SIZE - 3 && 
+                     col >= (BUNKER_WIDTH / BUNKER_BLOCK_SIZE) / 3 && 
+                     col < (BUNKER_WIDTH / BUNKER_BLOCK_SIZE) * 2/3) ||
+                    // Skip corners to give a more rounded appearance
+                    (row === 0 && col === 0) ||
+                    (row === 0 && col === BUNKER_WIDTH / BUNKER_BLOCK_SIZE - 1) ||
+                    (row === 1 && col === 0) ||
+                    (row === 1 && col === BUNKER_WIDTH / BUNKER_BLOCK_SIZE - 1)
+                ) {
+                    continue;
+                }
+                
+                bunker.blocks.push({
+                    x: bunkerX + col * BUNKER_BLOCK_SIZE,
+                    y: BUNKER_Y_POSITION + row * BUNKER_BLOCK_SIZE,
+                    width: BUNKER_BLOCK_SIZE,
+                    height: BUNKER_BLOCK_SIZE,
+                    health: 3 // Number of hits each block can take
+                });
+            }
+        }
+        
+        bunkers.push(bunker);
+    }
+    
+    console.log(`Created ${bunkers.length} bunkers`);
+}
+
 function startGame() {
     console.log("Starting game...");
     // Reset game state
@@ -270,6 +332,9 @@ function startGame() {
     
     // Create enemies
     createEnemies();
+    
+    // Create bunkers
+    createBunkers();
     
     // Start game loop
     gameActive = true;
@@ -343,6 +408,29 @@ function enemyFireBullet() {
     }
 }
 
+function checkBunkerCollisions(bullet, isPlayerBullet) {
+    for (let i = 0; i < bunkers.length; i++) {
+        for (let j = 0; j < bunkers[i].blocks.length; j++) {
+            const block = bunkers[i].blocks[j];
+            
+            if (checkCollision(bullet, block)) {
+                // Damage the bunker block and remove the bullet
+                block.health--;
+                
+                // Remove block if health reaches zero
+                if (block.health <= 0) {
+                    bunkers[i].blocks.splice(j, 1);
+                    j--; // Adjust index after removal
+                }
+                
+                return true; // Collision detected
+            }
+        }
+    }
+    
+    return false; // No collision
+}
+
 function updateBullets() {
     // Update player bullets
     for (let i = playerBullets.length - 1; i >= 0; i--) {
@@ -350,6 +438,12 @@ function updateBullets() {
         
         // Remove bullets that go off-screen
         if (playerBullets[i].y < 0) {
+            playerBullets.splice(i, 1);
+            continue;
+        }
+        
+        // Check for collisions with bunkers (player bullets)
+        if (checkBunkerCollisions(playerBullets[i], true)) {
             playerBullets.splice(i, 1);
             continue;
         }
@@ -374,6 +468,12 @@ function updateBullets() {
         
         // Remove bullets that go off-screen
         if (enemyBullets[i].y > CANVAS_HEIGHT) {
+            enemyBullets.splice(i, 1);
+            continue;
+        }
+        
+        // Check for collisions with bunkers (enemy bullets)
+        if (checkBunkerCollisions(enemyBullets[i], false)) {
             enemyBullets.splice(i, 1);
             continue;
         }
@@ -463,19 +563,73 @@ function checkCollision(obj1, obj2) {
            obj1.y + obj1.height > obj2.y;
 }
 
+function drawPlayer() {
+    // Main body of the rocket
+    ctx.fillStyle = player.invulnerable ? '#ff6666' : '#33ff33';
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+    
+    // Rocket nose cone (triangle at the top)
+    ctx.beginPath();
+    ctx.moveTo(player.x + player.width / 2, player.y - 10);
+    ctx.lineTo(player.x + player.width * 0.3, player.y);
+    ctx.lineTo(player.x + player.width * 0.7, player.y);
+    ctx.closePath();
+    ctx.fillStyle = player.invulnerable ? '#ff6666' : '#33ff33';
+    ctx.fill();
+    
+    // Left fin
+    ctx.beginPath();
+    ctx.moveTo(player.x, player.y + player.height);
+    ctx.lineTo(player.x - 10, player.y + player.height + 10);
+    ctx.lineTo(player.x, player.y + player.height - 5);
+    ctx.closePath();
+    ctx.fillStyle = player.invulnerable ? '#ff6666' : '#33ff33';
+    ctx.fill();
+    
+    // Right fin
+    ctx.beginPath();
+    ctx.moveTo(player.x + player.width, player.y + player.height);
+    ctx.lineTo(player.x + player.width + 10, player.y + player.height + 10);
+    ctx.lineTo(player.x + player.width, player.y + player.height - 5);
+    ctx.closePath();
+    ctx.fillStyle = player.invulnerable ? '#ff6666' : '#33ff33';
+    ctx.fill();
+    
+    // Rocket flame (animated)
+    const flameHeight = 10 + Math.random() * 5; // Random flicker effect
+    ctx.beginPath();
+    ctx.moveTo(player.x + player.width * 0.3, player.y + player.height);
+    ctx.lineTo(player.x + player.width * 0.5, player.y + player.height + flameHeight);
+    ctx.lineTo(player.x + player.width * 0.7, player.y + player.height);
+    ctx.closePath();
+    ctx.fillStyle = '#ff9933'; // Orange flame
+    ctx.fill();
+}
+
+function drawBunkers() {
+    ctx.fillStyle = '#33ff33';
+    
+    bunkers.forEach(bunker => {
+        bunker.blocks.forEach(block => {
+            // Different shades of green based on health
+            const healthColor = Math.floor(255 * (block.health / 3) * 0.8); // 80% max intensity
+            ctx.fillStyle = `rgb(${51}, ${healthColor + 100}, ${51})`;
+            ctx.fillRect(block.x, block.y, block.width, block.height);
+        });
+    });
+}
+
 function draw() {
     // Clear canvas
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
     // Draw player
     if (gameActive) {
-        ctx.fillStyle = player.invulnerable ? '#ff6666' : '#33ff33';
-        ctx.fillRect(player.x, player.y, player.width, player.height);
-        
-        // Draw player ship details
-        ctx.fillStyle = '#000';
-        ctx.fillRect(player.x + player.width / 2 - 2, player.y - 5, 4, 5);
+        drawPlayer();
     }
+    
+    // Draw bunkers
+    drawBunkers();
     
     // Draw enemies
     enemies.forEach(enemy => {
@@ -537,3 +691,46 @@ document.addEventListener('DOMContentLoaded', function() {
         startButton.addEventListener('click', startGame);
     }
 });
+
+// Function to test bunker creation and collision detection
+function testBunkers() {
+    // Create bunkers
+    createBunkers();
+    
+    // Test bunker creation
+    console.assert(bunkers.length === BUNKER_COUNT, "Correct number of bunkers created");
+    console.assert(bunkers[0].blocks.length > 0, "Bunker has blocks");
+    
+    // Test bunker collision detection
+    const testBullet = {
+        x: bunkers[0].blocks[0].x,
+        y: bunkers[0].blocks[0].y,
+        width: BULLET_WIDTH,
+        height: BULLET_HEIGHT
+    };
+    
+    const collisionResult = checkBunkerCollisions(testBullet, true);
+    console.assert(collisionResult === true, "Collision detection works for bunkers");
+    console.assert(bunkers[0].blocks[0].health === 2, "Bunker block health reduced after hit");
+    
+    // Output test results
+    console.log("Bunker tests completed");
+}
+
+// Function to test the player rocket ship drawing
+function testPlayerRocketDraw() {
+    // Create a test player
+    player = {
+        x: CANVAS_WIDTH / 2 - PLAYER_WIDTH / 2,
+        y: CANVAS_HEIGHT - PLAYER_HEIGHT - 20,
+        width: PLAYER_WIDTH,
+        height: PLAYER_HEIGHT,
+        invulnerable: false
+    };
+    
+    // Draw the player
+    drawPlayer();
+    
+    // Visual verification is required for this test
+    console.log("Player rocket ship drawing test completed. Check the canvas for visual verification.");
+}
